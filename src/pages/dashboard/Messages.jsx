@@ -2,25 +2,32 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Camera,
-  ImagePlus,
+  FlipHorizontal2,
   Loader2,
   MessageCircle,
+  MoreVertical,
   Paperclip,
   Plus,
   Send,
   Smile,
+  Trash2,
   X,
 } from "lucide-react";
-import { sendMessage, getMessages, getUserConversations } from "../../services/chat";
+import { getMessages, getUserConversations, sendMessage } from "../../services/chat";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../supabaseClient";
 
 const CONVERSATIONS_PAGE_SIZE = 10;
 const MESSAGES_PAGE_SIZE = 20;
 const EMOJIS = ["😀", "😂", "😍", "🥰", "😎", "😭", "👍", "👏", "🔥", "💙", "❤️", "🎉", "🤝", "👗", "👕", "🛍️"];
+const HIDDEN_CONVERSATIONS_KEY = "thrive-hidden-conversations";
 
 export default function Messages() {
   const { user } = useAuth();
+  const isMobileDevice =
+    typeof navigator !== "undefined"
+      ? /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+      : false;
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -36,10 +43,39 @@ export default function Messages() {
   const [attachmentPreview, setAttachmentPreview] = useState("");
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showEmojiMenu, setShowEmojiMenu] = useState(false);
-  const galleryInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  const [showConversationMenu, setShowConversationMenu] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState("environment");
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [hiddenConversationIds, setHiddenConversationIds] = useState([]);
   const attachmentMenuRef = useRef(null);
   const emojiMenuRef = useRef(null);
+  const conversationMenuRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const hiddenConversationIdsRef = useRef([]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      hiddenConversationIdsRef.current = [];
+      setHiddenConversationIds([]);
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(`${HIDDEN_CONVERSATIONS_KEY}-${user.id}`) || "[]");
+      const nextIds = Array.isArray(stored) ? stored : [];
+      hiddenConversationIdsRef.current = nextIds;
+      setHiddenConversationIds(nextIds);
+    } catch {
+      hiddenConversationIdsRef.current = [];
+      setHiddenConversationIds([]);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     void loadConversations();
@@ -52,7 +88,7 @@ export default function Messages() {
   }, [activeConversationId]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) return undefined;
 
     const channel = supabase
       .channel(`conversations-live-${user.id}`)
@@ -64,7 +100,7 @@ export default function Messages() {
           table: "conversations",
           filter: `buyer_id=eq.${user.id}`,
         },
-        () => void loadConversations()
+        () => void loadConversations(),
       )
       .on(
         "postgres_changes",
@@ -74,7 +110,7 @@ export default function Messages() {
           table: "conversations",
           filter: `seller_id=eq.${user.id}`,
         },
-        () => void loadConversations()
+        () => void loadConversations(),
       )
       .subscribe();
 
@@ -85,7 +121,7 @@ export default function Messages() {
   }, [user?.id, conversationPage]);
 
   useEffect(() => {
-    if (!activeConversationId) return;
+    if (!activeConversationId) return undefined;
 
     const channel = supabase
       .channel(`messages-live-${activeConversationId}`)
@@ -100,7 +136,7 @@ export default function Messages() {
         async () => {
           await loadMessages(activeConversationId, 1);
           await loadConversations();
-        }
+        },
       )
       .subscribe();
 
@@ -118,26 +154,113 @@ export default function Messages() {
       if (emojiMenuRef.current && !emojiMenuRef.current.contains(event.target)) {
         setShowEmojiMenu(false);
       }
+      if (conversationMenuRef.current && !conversationMenuRef.current.contains(event.target)) {
+        setShowConversationMenu(false);
+      }
     };
 
-    if (showAttachmentMenu || showEmojiMenu) {
+    if (showAttachmentMenu || showEmojiMenu || showConversationMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showAttachmentMenu, showEmojiMenu]);
+  }, [showAttachmentMenu, showEmojiMenu, showConversationMenu]);
 
   useEffect(() => {
     return () => {
       if (attachmentPreview) {
         URL.revokeObjectURL(attachmentPreview);
       }
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, [attachmentPreview]);
+
+  useEffect(() => {
+    if (!showCameraModal) {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+      }
+      return undefined;
+    }
+
+    const startCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setShowCameraModal(false);
+        cameraInputRef.current?.click();
+        return;
+      }
+
+      setCameraLoading(true);
+
+      try {
+        if (cameraStreamRef.current) {
+          cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        }
+
+        let stream;
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: cameraFacingMode },
+            },
+            audio: false,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+
+        cameraStreamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+      } catch {
+        setShowCameraModal(false);
+        cameraInputRef.current?.click();
+      } finally {
+        setCameraLoading(false);
+      }
+    };
+
+    void startCamera();
+
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  }, [showCameraModal, cameraFacingMode]);
+
+  const visibleConversations = useMemo(
+    () => conversations.filter((conversation) => !hiddenConversationIds.includes(conversation.id)),
+    [conversations, hiddenConversationIds],
+  );
+
+  useEffect(() => {
+    if (visibleConversations.length === 0) {
+      setActiveConversationId(null);
+      setMessages([]);
+      return;
+    }
+
+    if (!activeConversationId || hiddenConversationIds.includes(activeConversationId)) {
+      setActiveConversationId(visibleConversations[0].id);
+    }
+  }, [visibleConversations, activeConversationId, hiddenConversationIds]);
 
   const loadConversations = async () => {
     setLoading(true);
     setError("");
+
     try {
       const { conversations: nextConversations, count } = await getUserConversations({
         page: conversationPage,
@@ -146,15 +269,6 @@ export default function Messages() {
 
       setConversations(nextConversations);
       setConversationCount(count);
-      if (nextConversations[0]?.id) {
-        setActiveConversationId((current) =>
-          nextConversations.some((conversation) => conversation.id === current)
-            ? current
-            : nextConversations[0].id
-        );
-      } else {
-        setActiveConversationId(null);
-      }
     } catch (err) {
       setError(err.message || "Unable to load messages.");
     } finally {
@@ -178,7 +292,7 @@ export default function Messages() {
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId),
-    [conversations, activeConversationId]
+    [conversations, activeConversationId],
   );
 
   const recipientId = activeConversation
@@ -197,13 +311,22 @@ export default function Messages() {
   const totalMessagePages = Math.max(1, Math.ceil(messageCount / MESSAGES_PAGE_SIZE));
   const showConversationList = !activeConversationId;
 
+  const persistHiddenConversations = (nextIds) => {
+    hiddenConversationIdsRef.current = nextIds;
+    setHiddenConversationIds(nextIds);
+    if (user?.id) {
+      localStorage.setItem(`${HIDDEN_CONVERSATIONS_KEY}-${user.id}`, JSON.stringify(nextIds));
+    }
+  };
+
   const clearAttachment = () => {
     if (attachmentPreview) {
       URL.revokeObjectURL(attachmentPreview);
     }
     setAttachment(null);
     setAttachmentPreview("");
-    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
@@ -220,6 +343,49 @@ export default function Messages() {
     } else {
       setAttachmentPreview("");
     }
+  };
+
+  const handleDeleteChat = () => {
+    if (!activeConversationId) return;
+
+    const nextIds = [...new Set([...hiddenConversationIdsRef.current, activeConversationId])];
+    persistHiddenConversations(nextIds);
+    setShowConversationMenu(false);
+    setDraft("");
+    clearAttachment();
+  };
+
+  const handleOpenCamera = () => {
+    setShowAttachmentMenu(false);
+    setCameraFacingMode(isMobileDevice ? "environment" : "user");
+    setShowCameraModal(true);
+  };
+
+  const handleCloseCameraModal = () => {
+    setShowCameraModal(false);
+  };
+
+  const handleCapturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.drawImage(video, 0, 0, width, height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+
+      const file = new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+      setAttachmentFile(file);
+      setShowCameraModal(false);
+    }, "image/jpeg", 0.92);
   };
 
   const handleSend = async () => {
@@ -296,20 +462,88 @@ export default function Messages() {
         </div>
       )}
 
+      {showCameraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-[#091126] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-white">
+              <div>
+                <h3 className="text-base font-semibold">Camera</h3>
+                <p className="text-xs text-white/60">Laptop par webcam, phone par front/back switch available hai.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseCameraModal}
+                className="rounded-full p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="relative bg-black">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="aspect-video w-full bg-black object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              {cameraLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setCameraFacingMode((current) => (current === "environment" ? "user" : "environment"))
+                }
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+              >
+                <FlipHorizontal2 className="h-4 w-4" />
+                Switch camera
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseCameraModal}
+                  className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCapturePhoto}
+                  disabled={cameraLoading}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-dark transition hover:brightness-105 disabled:opacity-60"
+                >
+                  <Camera className="h-4 w-4" />
+                  Capture photo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : conversations.length === 0 ? (
+      ) : visibleConversations.length === 0 ? (
         <div className="card py-16 text-center">
           <MessageCircle className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-          <h2 className="mb-2 text-xl font-bold">No conversations yet</h2>
-          <p className="text-gray-500">Start a chat from an item details page.</p>
+          <h2 className="mb-2 text-xl font-bold">No conversations available</h2>
+          <p className="text-gray-500">Start a chat from an item details page, or keep only the chats you want in your inbox.</p>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <div className={`card max-h-[70vh] overflow-y-auto p-2 ${showConversationList ? "block" : "hidden lg:block"}`}>
-            {conversations.map((conversation) => {
+            {visibleConversations.map((conversation) => {
               const isBuyer = conversation.buyer_id === user?.id;
               const name = isBuyer
                 ? conversation.seller?.full_name || "Seller"
@@ -356,18 +590,46 @@ export default function Messages() {
 
           <div className={`card flex min-h-[70vh] flex-col ${showConversationList ? "hidden lg:flex" : "flex"}`}>
             <div className="border-b border-gray-100 pb-4 dark:border-gray-800">
-              <div className="mb-2 flex items-center gap-3 lg:mb-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveConversationId(null)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800 lg:hidden"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-                <div>
-                  <h2 className="text-lg font-bold">{participantName}</h2>
-                  <p className="text-sm text-gray-500">{activeConversation?.item?.title}</p>
+              <div className="mb-2 flex items-center justify-between gap-3 lg:mb-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveConversationId(null)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800 lg:hidden"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div>
+                    <h2 className="text-lg font-bold">{participantName}</h2>
+                    <p className="text-sm text-gray-500">{activeConversation?.item?.title}</p>
+                  </div>
                 </div>
+
+                {activeConversationId && (
+                  <div ref={conversationMenuRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowConversationMenu((current) => !current)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800"
+                      title="Conversation options"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+
+                    {showConversationMenu && (
+                      <div className="absolute right-0 top-12 z-20 w-48 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-slate-900">
+                        <button
+                          type="button"
+                          onClick={handleDeleteChat}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete chat
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -410,9 +672,7 @@ export default function Messages() {
                 <div className="mb-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-slate-800/60">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {attachment.name}
-                      </p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{attachment.name}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {(attachment.size / 1024 / 1024).toFixed(2)} MB
                       </p>
@@ -445,6 +705,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => {
                         setShowAttachmentMenu(false);
+                        setShowConversationMenu(false);
                         setShowEmojiMenu((current) => !current);
                       }}
                       className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800 sm:h-12 sm:w-12"
@@ -474,9 +735,16 @@ export default function Messages() {
 
                   <div ref={attachmentMenuRef} className="relative flex items-end">
                     <input
-                      ref={galleryInputRef}
+                      ref={imageInputRef}
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,application/pdf,.doc,.docx,.txt"
                       className="hidden"
                       onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)}
                     />
@@ -492,6 +760,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => {
                         setShowEmojiMenu(false);
+                        setShowConversationMenu(false);
                         setShowAttachmentMenu((current) => !current);
                       }}
                       className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-slate-800 sm:h-12 sm:w-12"
@@ -501,23 +770,33 @@ export default function Messages() {
                     </button>
 
                     {showAttachmentMenu && (
-                      <div className="absolute bottom-14 left-0 z-20 w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-slate-900 sm:w-48">
+                      <div className="absolute bottom-14 left-0 z-20 w-48 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-slate-900">
                         <button
                           type="button"
                           onClick={() => {
                             setShowAttachmentMenu(false);
-                            galleryInputRef.current?.click();
+                            imageInputRef.current?.click();
                           }}
                           className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-800"
                         >
-                          <ImagePlus className="h-4 w-4" />
-                          Upload from gallery
+                          <Paperclip className="h-4 w-4" />
+                          Upload image
                         </button>
                         <button
                           type="button"
                           onClick={() => {
                             setShowAttachmentMenu(false);
-                            cameraInputRef.current?.click();
+                            fileInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-slate-800"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Upload file
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenCamera();
                           }}
                           className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-slate-800"
                         >

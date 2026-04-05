@@ -1,31 +1,234 @@
-import { useState, useRef, useEffect } from "react";
-import { MessageSquare, X, Send, Sparkles, Globe } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Globe, MessageSquare, Send, Sparkles, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../supabaseClient";
 import { getUserItems, getWishlist } from "../services/items";
 
+const LANGUAGE_CONFIG = {
+  en: {
+    label: "English",
+    welcome: (name) =>
+      `Hi ${name}! I am your Thrive assistant. I can help with wardrobe counts, selling advice, donation guidance, outfit ideas, and wishlist help.`,
+    confirmation: "Sure, I will continue in English now.",
+    placeholder: "Ask about your wardrobe...",
+    quickReplies: [
+      "How many clothes do I have?",
+      "What should I sell?",
+      "Give me outfit ideas",
+      "Sustainability tips",
+    ],
+    general: (name) =>
+      `Hi ${name}, I can help with wardrobe counts, what to sell, what to donate, outfit ideas, wishlist guidance, and sustainability tips. Ask me something specific and I will keep it practical.`,
+    count: (total, active, wardrobe, sold) =>
+      `You currently have ${total} total items: ${active} listed for sale, ${wardrobe} kept in wardrobe, and ${sold} sold.`,
+    sell: (items) =>
+      items.length
+        ? `You can try listing ${items.join(", ")} first. Start with items in good condition, clear photos, and a fair price to get better interest.`
+        : "You do not have many wardrobe-only items right now. Add a few wearable pieces first, then I can suggest the best ones to sell.",
+    donate:
+      "Donate items that are still usable but may not sell quickly, like older basics or pieces with low resale value. Clean clothes, clear sizing, and a short note help NGOs process them faster.",
+    outfit: (items) =>
+      items.length > 1
+        ? `A simple outfit idea: start with ${items[0]}, pair it with ${items[1]}, and keep accessories minimal for a clean everyday look.`
+        : "Add a few tops, bottoms, and one versatile layer to your wardrobe and I will start giving more specific outfit combinations.",
+    wishlist: (items) =>
+      items.length
+        ? `Your wishlist currently includes ${items.join(", ")}. Look for similar categories in Marketplace and compare price, condition, and brand before buying.`
+        : "Your wishlist is still empty. Explore Marketplace, save a few pieces you like, and I can help compare them for you.",
+    sustainability:
+      "A good sustainability habit is to rotate what you already own, repair before replacing, and sell or donate pieces you no longer wear. That keeps your wardrobe useful and reduces waste.",
+  },
+  hi: {
+    label: "Hindi",
+    welcome: (name) =>
+      `Hi ${name}! Main Thrive assistant hoon. Main aapko wardrobe count, selling advice, donation guidance, outfit ideas aur wishlist help de sakta hoon.`,
+    confirmation: "Theek hai, ab main aapse Hindi me hi baat karunga.",
+    placeholder: "Apna sawaal poochho...",
+    quickReplies: [
+      "Mere paas kitne clothes hain?",
+      "Kya sell karna chahiye?",
+      "Outfit ideas do",
+      "Sustainability tips",
+    ],
+    general: (name) =>
+      `Hi ${name}, main wardrobe count, selling advice, donation suggestions, outfit ideas, wishlist guidance aur sustainability tips me help kar sakta hoon. Koi specific sawaal poochho.`,
+    count: (total, active, wardrobe, sold) =>
+      `Aapke paas abhi kul ${total} items hain: ${active} sale par listed, ${wardrobe} wardrobe me, aur ${sold} sold.`,
+    sell: (items) =>
+      items.length
+        ? `Sabse pehle ${items.join(", ")} ko list kar sakte ho. Good condition, clear photos aur fair price se interest zyada milega.`
+        : "Abhi wardrobe-only items kam hain. Kuch wearable pieces add karo, phir main better selling suggestions dunga.",
+    donate:
+      "Jo items usable hain lekin jaldi sell nahi honge, unhe donate karna better hai. Clean clothes, correct size aur short note dene se NGO ko process karna easy hota hai.",
+    outfit: (items) =>
+      items.length > 1
+        ? `Ek simple outfit idea: ${items[0]} ke saath ${items[1]} pair karo aur accessories minimal rakho.`
+        : "Wardrobe me thode tops, bottoms aur ek versatile layer add karo, phir main aur specific outfit ideas de paunga.",
+    wishlist: (items) =>
+      items.length
+        ? `Aapki wishlist me abhi ${items.join(", ")} hai. Marketplace me similar items dekhte waqt price, condition aur brand compare karo.`
+        : "Aapki wishlist abhi empty hai. Marketplace me kuch items save karo, phir main comparison me help karunga.",
+    sustainability:
+      "Sustainability ke liye jo kapde aapke paas hain unko zyada baar style karo, repair karo, aur jo use nahi hote unhe sell ya donate kar do.",
+  },
+  ta: {
+    label: "Tamil",
+    welcome: (name) => `Hi ${name}! Naan Thrive assistant. Ungal wardrobe, sell, donate, outfit ideas matrum wishlist-il help pannalaam.`,
+    confirmation: "Sari, ippo naan ungalukku Tamil la than reply pannuren.",
+    placeholder: "Ungal kelviyai ketkavum...",
+    quickReplies: ["En kitta evlo clothes irukku?", "Enna sell panna?", "Outfit ideas kudu", "Sustainability tips"],
+    general: (name) => `Hi ${name}, naan wardrobe count, sell advice, donate guidance, outfit ideas, wishlist help kudukka mudiyum.`,
+  },
+  te: {
+    label: "Telugu",
+    welcome: (name) => `Hi ${name}! Nenu Thrive assistant. Wardrobe count, selling advice, donation guidance, outfit ideas mariyu wishlist help chestanu.`,
+    confirmation: "Sare, ippati nundi nenu Telugu lo ne reply chestanu.",
+    placeholder: "Mee prashna adagandi...",
+    quickReplies: ["Na daggara enni clothes unnayi?", "Emi sell cheyyali?", "Outfit ideas ivvu", "Sustainability tips"],
+    general: (name) => `Hi ${name}, nenu wardrobe count, selling, donation, outfit ideas mariyu wishlist help ivvagalanu.`,
+  },
+  bn: {
+    label: "Bengali",
+    welcome: (name) => `Hi ${name}! Ami Thrive assistant. Wardrobe count, selling advice, donation guidance, outfit ideas ebong wishlist niye help korte pari.`,
+    confirmation: "Thik ache, ekhon ami Bangla-tei reply korbo.",
+    placeholder: "Apnar proshno likhun...",
+    quickReplies: ["Amar kache kato clothes ache?", "Ki sell korbo?", "Outfit ideas dao", "Sustainability tips"],
+    general: (name) => `Hi ${name}, ami wardrobe count, selling, donation, outfit ideas ebong wishlist help korte pari.`,
+  },
+  mr: {
+    label: "Marathi",
+    welcome: (name) => `Hi ${name}! Mi Thrive assistant aahe. Wardrobe count, selling advice, donation guidance, outfit ideas ani wishlist madhe help karu shakto.`,
+    confirmation: "Thik aahe, ata mi tumhala Marathi madhech reply dein.",
+    placeholder: "Tumcha prashna vicha...",
+    quickReplies: ["Majhyakade kiti clothes aahet?", "Kay sell karu?", "Outfit ideas dya", "Sustainability tips"],
+    general: (name) => `Hi ${name}, mi wardrobe count, selling, donation, outfit ideas ani wishlist madhe help karu shakto.`,
+  },
+  gu: {
+    label: "Gujarati",
+    welcome: (name) => `Hi ${name}! Hu Thrive assistant chu. Wardrobe count, selling advice, donation guidance, outfit ideas ane wishlist ma madad kari saku chu.`,
+    confirmation: "Saru, have hu tamne Gujarati maaj reply karish.",
+    placeholder: "Tamaro prashn lakho...",
+    quickReplies: ["Mara pase ketla clothes chhe?", "Shu sell karu?", "Outfit ideas aapo", "Sustainability tips"],
+    general: (name) => `Hi ${name}, hu wardrobe count, selling, donation, outfit ideas ane wishlist ma madad kari saku chu.`,
+  },
+  kn: {
+    label: "Kannada",
+    welcome: (name) => `Hi ${name}! Naanu Thrive assistant. Wardrobe count, selling advice, donation guidance, outfit ideas mattu wishlist-ge sahaaya maadabahudu.`,
+    confirmation: "Sari, iga nanu nimge Kannada-dalle reply maaduttene.",
+    placeholder: "Nimma prashne keliri...",
+    quickReplies: ["Nanna hattira eshtu clothes ide?", "Yenannu sell maadli?", "Outfit ideas kodi", "Sustainability tips"],
+    general: (name) => `Hi ${name}, naanu wardrobe count, selling, donation, outfit ideas mattu wishlist-ge sahaaya maadabahudu.`,
+  },
+  fr: {
+    label: "French",
+    welcome: (name) => `Hi ${name}! Je suis l'assistant Thrive. Je peux aider avec la garde-robe, la vente, les dons, les idées de tenue et la wishlist.`,
+    confirmation: "D'accord, je vais maintenant répondre uniquement en français.",
+    placeholder: "Posez votre question...",
+    quickReplies: ["Combien de vêtements j'ai ?", "Que dois-je vendre ?", "Donne-moi des idées de tenue", "Conseils durables"],
+    general: (name) => `Hi ${name}, je peux aider avec le nombre d'articles, la vente, les dons, les idées de tenue et la wishlist.`,
+  },
+  es: {
+    label: "Spanish",
+    welcome: (name) => `Hi ${name}! Soy el asistente de Thrive. Puedo ayudarte con tu armario, ventas, donaciones, ideas de outfit y wishlist.`,
+    confirmation: "Perfecto, ahora responderé solo en español.",
+    placeholder: "Haz tu pregunta...",
+    quickReplies: ["¿Cuánta ropa tengo?", "¿Qué debería vender?", "Dame ideas de outfit", "Consejos sostenibles"],
+    general: (name) => `Hi ${name}, puedo ayudarte con el conteo del armario, ventas, donaciones, ideas de outfit y wishlist.`,
+  },
+  de: {
+    label: "German",
+    welcome: (name) => `Hi ${name}! Ich bin der Thrive-Assistent. Ich helfe bei Kleiderschrank, Verkauf, Spenden, Outfit-Ideen und Wishlist.`,
+    confirmation: "Klar, ich antworte jetzt nur noch auf Deutsch.",
+    placeholder: "Stelle deine Frage...",
+    quickReplies: ["Wie viele Kleider habe ich?", "Was soll ich verkaufen?", "Gib mir Outfit-Ideen", "Nachhaltigkeitstipps"],
+    general: (name) => `Hi ${name}, ich kann bei Kleiderschrank-Zahlen, Verkauf, Spenden, Outfit-Ideen und Wishlist helfen.`,
+  },
+  ja: {
+    label: "Japanese",
+    welcome: (name) => `Hi ${name}! Thrive assistantです。ワードローブ、販売、寄付、コーデ提案、ウィッシュリストをお手伝いできます。`,
+    confirmation: "はい、これから日本語で返信します。",
+    placeholder: "質問を入力してください...",
+    quickReplies: ["服は何着ありますか？", "何を売るべき？", "コーデを提案して", "サステナビリティのコツ"],
+    general: (name) => `Hi ${name}、ワードローブ数、販売、寄付、コーデ提案、ウィッシュリストについてお手伝いできます。`,
+  },
+  ar: {
+    label: "Arabic",
+    welcome: (name) => `Hi ${name}! أنا مساعد Thrive. أستطيع مساعدتك في خزانة الملابس والبيع والتبرع وأفكار الإطلالات وقائمة الرغبات.`,
+    confirmation: "حسنًا، سأرد عليك الآن بالعربية فقط.",
+    placeholder: "اكتب سؤالك...",
+    quickReplies: ["كم عدد الملابس لدي؟", "ماذا أبيع؟", "اعطني أفكار إطلالات", "نصائح للاستدامة"],
+    general: (name) => `Hi ${name}، أستطيع مساعدتك في عدد القطع والبيع والتبرع وأفكار الإطلالات وقائمة الرغبات.`,
+  },
+  zh: {
+    label: "Chinese",
+    welcome: (name) => `Hi ${name}！我是 Thrive 助手，可以帮助你处理衣橱统计、出售建议、捐赠建议、穿搭灵感和心愿单。`,
+    confirmation: "好的，我接下来会只用中文回复你。",
+    placeholder: "请输入你的问题...",
+    quickReplies: ["我有多少件衣服？", "我应该卖什么？", "给我穿搭建议", "可持续时尚建议"],
+    general: (name) => `Hi ${name}，我可以帮助你处理衣橱数量、出售、捐赠、穿搭建议和心愿单。`,
+  },
+};
+
 const LANGUAGES = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "hi", label: "हिंदी", flag: "🇮🇳" },
-  { code: "ta", label: "தமிழ்", flag: "🇮🇳" },
-  { code: "te", label: "తెలుగు", flag: "🇮🇳" },
-  { code: "bn", label: "বাংলা", flag: "🇮🇳" },
-  { code: "mr", label: "मराठी", flag: "🇮🇳" },
-  { code: "gu", label: "ગુજરાતી", flag: "🇮🇳" },
-  { code: "kn", label: "ಕನ್ನಡ", flag: "🇮🇳" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
-  { code: "ja", label: "日本語", flag: "🇯🇵" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
-  { code: "zh", label: "中文", flag: "🇨🇳" },
+  { code: "en", label: "English" },
+  { code: "hi", label: "Hindi" },
+  { code: "ta", label: "Tamil" },
+  { code: "te", label: "Telugu" },
+  { code: "bn", label: "Bengali" },
+  { code: "mr", label: "Marathi" },
+  { code: "gu", label: "Gujarati" },
+  { code: "kn", label: "Kannada" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
+  { code: "de", label: "German" },
+  { code: "ja", label: "Japanese" },
+  { code: "ar", label: "Arabic" },
+  { code: "zh", label: "Chinese" },
 ];
 
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || "https://tsddhnkkwyqisqlevbcq.supabase.co";
-const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzZGRobmtrd3lxaXNxbGV2YmNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjg2MDAsImV4cCI6MjA4OTYwNDYwMH0.3U77lBR9prB0OEQGBaBRmb2kfMth-2rxjjh4bqfAKMw";
+function buildFallbackReply(input, { userName, wardrobeData, wishlistData, selectedLang }) {
+  const languageCopy = LANGUAGE_CONFIG[selectedLang.code] || LANGUAGE_CONFIG.en;
+  const text = input.toLowerCase();
+  const activeListings = wardrobeData.filter((item) => item.status === "active");
+  const wardrobeOnly = wardrobeData.filter((item) => item.status === "wardrobe");
+  const soldItems = wardrobeData.filter((item) => item.status === "sold");
+  const topWishlist = wishlistData.slice(0, 3).map((item) => item.items?.title).filter(Boolean);
+
+  if (languageCopy.count && (text.includes("how many") || text.includes("count") || text.includes("clothes") || text.includes("kitne"))) {
+    return languageCopy.count(wardrobeData.length, activeListings.length, wardrobeOnly.length, soldItems.length);
+  }
+
+  if (languageCopy.sell && (text.includes("sell") || text.includes("bech"))) {
+    return languageCopy.sell(wardrobeOnly.slice(0, 3).map((item) => item.title).filter(Boolean));
+  }
+
+  if (languageCopy.donate && (text.includes("donate") || text.includes("daan"))) {
+    return languageCopy.donate;
+  }
+
+  if (languageCopy.outfit && (text.includes("outfit") || text.includes("wear") || text.includes("pehen"))) {
+    return languageCopy.outfit(wardrobeData.slice(0, 3).map((item) => item.title).filter(Boolean));
+  }
+
+  if (languageCopy.wishlist && (text.includes("wishlist") || text.includes("recommend") || text.includes("suggest"))) {
+    return languageCopy.wishlist(topWishlist);
+  }
+
+  if (languageCopy.sustainability && (text.includes("sustain") || text.includes("eco") || text.includes("tip"))) {
+    return languageCopy.sustainability;
+  }
+
+  return languageCopy.general(userName);
+}
+
+function isReplyInSelectedLanguage(reply, selectedLang) {
+  if (!reply) return false;
+
+  if (selectedLang.code === "en") return !/[\u0900-\u097F]/.test(reply);
+  if (selectedLang.code === "hi") return /[\u0900-\u097F]/.test(reply);
+  return true;
+}
 
 export default function Chatbot({ defaultOpen = false, onClose }) {
   const { user, profile } = useAuth();
@@ -40,217 +243,137 @@ export default function Chatbot({ defaultOpen = false, onClose }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const userName = profile?.full_name?.split(" ")[0] || "there";
+  const userName = useMemo(
+    () => profile?.full_name?.split(" ")[0] || user?.email?.split("@")[0] || "there",
+    [profile?.full_name, user?.email],
+  );
+
+  const currentLanguageCopy = LANGUAGE_CONFIG[selectedLang.code] || LANGUAGE_CONFIG.en;
 
   useEffect(() => {
-    if (isOpen && user) loadUserData();
+    if (isOpen && user) {
+      void (async () => {
+        const [items, wishlist] = await Promise.all([
+          getUserItems(user.id),
+          getWishlist(user.id),
+        ]);
+
+        setWardrobeData(items || []);
+        setWishlistData(wishlist?.items || wishlist || []);
+      })();
+    }
   }, [isOpen, user]);
 
   useEffect(() => {
-    if (profile || user) {
-      setMessages([{
-        id: 1,
-        sender: "bot",
-        text: `Hi ${userName}! 👋 I'm your Thrive AI Stylist.\n\nI can help you with:\n• 👗 Your wardrobe & outfit ideas\n• 🛍️ Marketplace recommendations\n• ♻️ Sustainability tips\n• 💰 Selling & donating advice\n\nYou can also chat with me in your preferred language using the 🌐 button above!`
-      }]);
-    }
-  }, [profile, user]);
-
-  const loadUserData = async () => {
-    if (!user) return;
-    const [items, wishlist] = await Promise.all([
-      getUserItems(user.id),
-      getWishlist(user.id)
-    ]);
-    setWardrobeData(items || []);
-    setWishlistData(wishlist || []);
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    setMessages((current) => {
+      if (current.length > 0) return current;
+      return [
+        {
+          id: 1,
+          sender: "bot",
+          text: currentLanguageCopy.welcome(userName),
+        },
+      ];
+    });
+  }, [currentLanguageCopy, userName]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isOpen]);
 
-  const buildSystemPrompt = () => {
-    const wardrobeItems = wardrobeData.map(i =>
-      `- ${i.title} (${i.category || "Unknown"}, ${i.condition || ""}, ₹${i.price || 0}, status: ${i.status})`
-    ).join("\n");
+  const tryEdgeFunctionReply = async (conversationHistory) => {
+    const { data, error } = await supabase.functions.invoke("chat", {
+      body: {
+        system: `Reply only in ${currentLanguageCopy.label}. Keep the reply concise, practical, and natural for a fashion marketplace assistant.`,
+        messages: conversationHistory,
+        metadata: {
+          language_code: selectedLang.code,
+          language: currentLanguageCopy.label,
+          wardrobe_count: wardrobeData.length,
+          wishlist_count: wishlistData.length,
+        },
+      },
+    });
 
-    const activeListings = wardrobeData.filter(i => i.status === "active");
-    const wardrobeOnly = wardrobeData.filter(i => i.status === "wardrobe");
-    const soldItems = wardrobeData.filter(i => i.status === "sold");
-
-    const wishlistItems = wishlistData.map(w =>
-      `- ${w.items?.title || "Unknown"} (₹${w.items?.price || 0})`
-    ).join("\n");
-
-    return `You are Thrive Stylist AI, a friendly and knowledgeable fashion assistant for the Thrive Fashion app — a sustainable fashion marketplace.
-
-User Info:
-- Name: ${profile?.full_name || "User"}
-- Email: ${user?.email || ""}
-
-Their Wardrobe Data:
-Total items: ${wardrobeData.length}
-Active listings (for sale): ${activeListings.length}
-Wardrobe only items: ${wardrobeOnly.length}
-Sold items: ${soldItems.length}
-
-Items:
-${wardrobeItems || "No items yet"}
-
-Wishlist (${wishlistData.length} items):
-${wishlistItems || "Empty wishlist"}
-
-IMPORTANT LANGUAGE INSTRUCTION:
-The user has selected "${selectedLang.label}" as their preferred language.
-You MUST respond ONLY in ${selectedLang.label}.
-Do not mix languages. Respond entirely in ${selectedLang.label}.
-If the language is Arabic, use RTL-friendly formatting.
-
-Your role:
-- Answer questions about their wardrobe, items, listings
-- Give outfit suggestions based on their clothes
-- Give sustainability tips
-- Help them decide what to sell or donate
-- Recommend items from marketplace
-- Be friendly, concise and helpful
-- Use emojis occasionally
-- Keep responses short and to the point (max 3-4 sentences)
-- If asked about specific counts, use the exact data provided above`;
+    if (error) throw error;
+    return data?.content?.[0]?.text || data?.reply || data?.message || null;
   };
 
-  const handleSend = async (e) => {
-    e.preventDefault();
+  const handleSend = async (event) => {
+    event.preventDefault();
     if (!inputValue.trim() || isTyping) return;
 
-    const userMsg = { id: Date.now(), sender: "user", text: inputValue };
-    setMessages(prev => [...prev, userMsg]);
-    const currentInput = inputValue;
+    const currentInput = inputValue.trim();
+    setMessages((prev) => [...prev, { id: Date.now(), sender: "user", text: currentInput }]);
     setInputValue("");
     setIsTyping(true);
 
     try {
-      // ✅ Build conversation history
-      const conversationHistory = messages
-        .filter(m => m.id !== 1)
-        .map(m => ({
-          role: m.sender === "user" ? "user" : "assistant",
-          content: m.text
-        }));
+      const conversationHistory = messages.map((message) => ({
+        role: message.sender === "user" ? "user" : "assistant",
+        content: message.text,
+      })).concat({ role: "user", content: currentInput });
 
-      conversationHistory.push({ role: "user", content: currentInput });
+      let reply = null;
 
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-            "apikey": SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            system: buildSystemPrompt(),
-            messages: conversationHistory,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("Edge function error:", errText);
-        throw new Error(`HTTP ${response.status}: ${errText}`);
+      try {
+        reply = await tryEdgeFunctionReply(conversationHistory);
+      } catch (edgeError) {
+        console.warn("Chat edge function unavailable, falling back locally:", edgeError?.message || edgeError);
       }
 
-      const data = await response.json();
-      console.log("Chat response:", data);
+      if (!reply || !isReplyInSelectedLanguage(reply, selectedLang)) {
+        reply = buildFallbackReply(currentInput, {
+          userName,
+          wardrobeData,
+          wishlistData,
+          selectedLang,
+        });
+      }
 
-      const botText = data.content?.[0]?.text || "Sorry, I couldn't process that. Please try again!";
-
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        sender: "bot",
-        text: botText
-      }]);
-
-    } catch (err) {
-      console.error("Chatbot error:", err);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        sender: "bot",
-        text: `Error: ${err.message}. Please check console for details.`
-      }]);
+      setMessages((prev) => [...prev, { id: Date.now() + 1, sender: "bot", text: reply }]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleLangSelect = (lang) => {
-    setSelectedLang(lang);
-    setShowLangPicker(false);
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      sender: "bot",
-      text: lang.code === "en"
-        ? `Language changed to ${lang.flag} ${lang.label}! How can I help you?`
-        : lang.code === "hi"
-        ? `भाषा ${lang.flag} ${lang.label} में बदल दी गई है! मैं आपकी कैसे मदद कर सकता हूं?`
-        : lang.code === "ta"
-        ? `மொழி ${lang.flag} ${lang.label} ஆக மாற்றப்பட்டது! நான் உங்களுக்கு எப்படி உதவலாம்?`
-        : `Language changed to ${lang.flag} ${lang.label}! How can I help you?`
-    }]);
-  };
-
-  const quickReplies = [
-    "How many clothes do I have?",
-    "What should I sell?",
-    "Give me outfit ideas",
-    "Sustainability tips",
-  ];
-
   return (
     <>
-      {/* Toggle Button */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-dark text-white rounded-full flex items-center justify-center shadow-2xl z-50 hover:bg-primary hover:text-dark transition-colors"
+            className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-dark text-white shadow-2xl transition-colors hover:bg-primary hover:text-dark"
+            aria-label="Open Thrive AI assistant"
           >
-            <MessageSquare className="w-6 h-6" />
+            <MessageSquare className="h-6 w-6" />
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-6 right-6 w-[350px] sm:w-[400px] h-[600px] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl z-50 flex flex-col overflow-hidden border border-gray-100 dark:border-gray-800"
+            exit={{ opacity: 0, scale: 0.92, y: 20 }}
+            className="fixed bottom-6 right-6 z-50 flex h-[600px] w-[350px] flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl dark:border-gray-800 dark:bg-slate-900 sm:w-[400px]"
           >
-            {/* Header */}
-            <div className="bg-dark dark:bg-slate-800 text-white p-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center justify-between bg-dark p-4 text-white dark:bg-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5 text-dark" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary">
+                  <Sparkles className="h-5 w-5 text-dark" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm">Thrive Stylist AI</h3>
-                  <p className="text-xs text-primary flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />
-                    Online • {selectedLang.flag} {selectedLang.label}
+                  <h3 className="text-sm font-bold">Thrive Assistant</h3>
+                  <p className="flex items-center gap-1 text-xs text-primary">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400" />
+                    Online · {currentLanguageCopy.label}
                   </p>
                 </div>
               </div>
@@ -258,131 +381,109 @@ Your role:
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <button
-                    onClick={() => setShowLangPicker(!showLangPicker)}
-                    className="p-2 hover:bg-white/20 rounded-full transition-colors flex items-center gap-1"
+                    type="button"
+                    onClick={() => setShowLangPicker((current) => !current)}
+                    className="rounded-full p-2 transition-colors hover:bg-white/15"
                     title="Change language"
                   >
-                    <Globe className="w-4 h-4" />
-                    <span className="text-xs">{selectedLang.flag}</span>
+                    <Globe className="h-4 w-4" />
                   </button>
 
                   <AnimatePresence>
                     {showLangPicker && (
                       <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        initial={{ opacity: 0, y: -8, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute right-0 top-10 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 max-h-72 overflow-y-auto"
+                        exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                        className="absolute right-0 top-11 z-50 max-h-72 w-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-slate-900"
                       >
-                        <div className="p-2">
-                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2 py-1 mb-1">
-                            Choose Language
-                          </p>
-                          {LANGUAGES.map((lang) => (
-                            <button
-                              key={lang.code}
-                              onClick={() => handleLangSelect(lang)}
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                                selectedLang.code === lang.code
-                                  ? "bg-primary/10 text-primary font-semibold"
-                                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700"
-                              }`}
-                            >
-                              <span className="text-lg">{lang.flag}</span>
-                              <span>{lang.label}</span>
-                              {selectedLang.code === lang.code && (
-                                <span className="ml-auto text-primary">✓</span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
+                        {LANGUAGES.map((language) => (
+                          <button
+                            key={language.code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedLang(language);
+                              setShowLangPicker(false);
+                              const langCopy = LANGUAGE_CONFIG[language.code] || LANGUAGE_CONFIG.en;
+                              setMessages((prev) => [
+                                ...prev,
+                                {
+                                  id: Date.now(),
+                                  sender: "bot",
+                                  text: langCopy.confirmation,
+                                },
+                              ]);
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm ${
+                              selectedLang.code === language.code
+                                ? "bg-primary/10 font-semibold text-primary"
+                                : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            {language.label}
+                          </button>
+                        ))}
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setIsOpen(false);
                     onClose?.();
                   }}
-                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  className="rounded-full p-2 transition-colors hover:bg-white/15"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 p-4 overflow-y-auto bg-gray-50 dark:bg-slate-800/50 flex flex-col gap-3">
-              {messages.map((msg) => (
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-gray-50 p-4 dark:bg-slate-800/50">
+              {messages.map((message) => (
                 <motion.div
+                  key={message.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  key={msg.id}
-                  className={`flex gap-2 ${msg.sender === "user" ? "ml-auto flex-row-reverse" : "mr-auto"} max-w-[88%]`}
+                  className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-                    msg.sender === "user"
-                      ? "bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300"
-                      : "bg-primary text-dark"
-                  }`}>
-                    {msg.sender === "user"
-                      ? (profile?.full_name?.charAt(0).toUpperCase() || "U")
-                      : <Sparkles className="w-3.5 h-3.5" />
-                    }
-                  </div>
-
-                  <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
-                    msg.sender === "user"
-                      ? "bg-dark dark:bg-indigo-600 text-white rounded-tr-none"
-                      : "bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-600 shadow-sm rounded-tl-none"
-                  }`}
+                  <div
+                    className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      message.sender === "user"
+                        ? "rounded-tr-none bg-dark text-white"
+                        : "rounded-tl-none border border-gray-100 bg-white text-gray-800 shadow-sm dark:border-gray-700 dark:bg-slate-700 dark:text-gray-100"
+                    }`}
                     dir={selectedLang.code === "ar" ? "rtl" : "ltr"}
                   >
-                    {msg.text}
-                    {msg.image && (
-                      <div className="mt-3 rounded-xl overflow-hidden border border-gray-100">
-                        <img src={msg.image} alt="Item" className="w-full h-auto" />
-                      </div>
-                    )}
+                    {message.text}
                   </div>
                 </motion.div>
               ))}
 
               {isTyping && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex gap-2 items-center"
-                >
-                  <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
-                    <Sparkles className="w-3.5 h-3.5 text-dark" />
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-tl-none border border-gray-100 bg-white px-4 py-3 text-sm shadow-sm dark:border-gray-700 dark:bg-slate-700">
+                    Thinking...
                   </div>
-                  <div className="bg-white dark:bg-slate-700 border border-gray-100 dark:border-gray-600 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                    <div className="flex gap-1 items-center">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </div>
-                  </div>
-                </motion.div>
+                </div>
               )}
 
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Replies */}
             {messages.length <= 1 && (
-              <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800/50 flex gap-2 overflow-x-auto shrink-0">
-                {quickReplies.map((reply) => (
+              <div className="flex gap-2 overflow-x-auto bg-gray-50 px-4 py-2 dark:bg-slate-800/50">
+                {currentLanguageCopy.quickReplies.map((reply) => (
                   <button
                     key={reply}
+                    type="button"
                     onClick={() => {
                       setInputValue(reply);
                       inputRef.current?.focus();
                     }}
-                    className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+                    className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-primary hover:text-primary dark:border-gray-700 dark:bg-slate-900 dark:text-gray-200 dark:hover:border-primary dark:hover:text-primary"
                   >
                     {reply}
                   </button>
@@ -390,35 +491,27 @@ Your role:
               </div>
             )}
 
-            {/* Input */}
             <form
               onSubmit={handleSend}
-              className="p-4 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-gray-800 flex items-center gap-2 shrink-0"
+              className="flex items-center gap-2 border-t border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-slate-900"
             >
               <input
                 ref={inputRef}
                 type="text"
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder={
-                  selectedLang.code === "hi" ? "अपना सवाल पूछें..." :
-                  selectedLang.code === "ta" ? "உங்கள் கேள்வியை கேளுங்கள்..." :
-                  selectedLang.code === "fr" ? "Posez votre question..." :
-                  selectedLang.code === "es" ? "Haz tu pregunta..." :
-                  selectedLang.code === "ar" ? "اسأل سؤالك..." :
-                  "Ask about your wardrobe..."
-                }
+                onChange={(event) => setInputValue(event.target.value)}
+                placeholder={currentLanguageCopy.placeholder}
+                className="flex-1 rounded-full bg-gray-100 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary dark:bg-slate-800 dark:text-white"
                 dir={selectedLang.code === "ar" ? "rtl" : "ltr"}
-                className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 type="submit"
                 disabled={!inputValue.trim() || isTyping}
-                className="w-10 h-10 rounded-full bg-dark dark:bg-primary text-white dark:text-dark flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-dark text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary dark:text-dark"
               >
-                <Send className="w-4 h-4 ml-0.5" />
+                <Send className="ml-0.5 h-4 w-4" />
               </motion.button>
             </form>
           </motion.div>

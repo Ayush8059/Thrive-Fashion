@@ -36,7 +36,7 @@ export async function addItem(itemData) {
 
   const { data, error } = await supabase
     .from("items")
-    .insert([{ ...itemData, user_id: user.id, status: "active" }])
+    .insert([{ ...itemData, user_id: user.id, status: itemData.status || "active" }])
     .select()
     .single();
 
