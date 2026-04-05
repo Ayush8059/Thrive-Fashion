@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Trash2, Ban, CheckCircle, AlertTriangle, Users } from "lucide-react";
+import { Search, Trash2, Ban, CheckCircle, AlertTriangle, Users, RotateCcw } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 
 const GRAD = ["#6366f1,#8b5cf6","#8b5cf6,#ec4899","#06b6d4,#6366f1","#10b981,#06b6d4","#f59e0b,#ef4444"];
@@ -9,6 +9,7 @@ function Badge({ type }) {
   const styles = {
     active:  { bg:"rgba(16,185,129,0.15)",  color:"#34d399", border:"rgba(16,185,129,0.2)"  },
     blocked: { bg:"rgba(239,68,68,0.15)",   color:"#f87171", border:"rgba(239,68,68,0.2)"   },
+    deleted: { bg:"rgba(148,163,184,0.15)", color:"#cbd5e1", border:"rgba(148,163,184,0.2)" },
     pending: { bg:"rgba(245,158,11,0.15)",  color:"#fbbf24", border:"rgba(245,158,11,0.2)"  },
     admin:   { bg:"rgba(99,102,241,0.15)",  color:"#818cf8", border:"rgba(99,102,241,0.2)"  },
     user:    { bg:"rgba(255,255,255,0.06)", color:"rgba(255,255,255,0.5)", border:"rgba(255,255,255,0.1)" },
@@ -61,7 +62,7 @@ export default function AdminUsers() {
       setUsers((profiles||[]).map(p => ({
         ...p,
         total_items: countMap[p.id]||0,
-        blocked: Boolean(p.is_blocked) || p.status==="blocked",
+        blocked: Boolean(p.is_blocked) || p.status==="blocked" || p.status==="deleted",
       })));
     } catch (err) {
       setError(err.message);
@@ -71,8 +72,22 @@ export default function AdminUsers() {
   };
 
   const handleDelete = async (id) => {
-    const { error } = await supabase.from("profiles").delete().eq("id", id);
-    if (!error) setUsers(prev => prev.filter(u => u.id !== id));
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        status: "deleted",
+        is_blocked: true,
+      })
+      .eq("id", id);
+    if (!error) {
+      setUsers(prev =>
+        prev.map(u => (
+          u.id === id
+            ? { ...u, status: "deleted", is_blocked: true, blocked: true }
+            : u
+        ))
+      );
+    }
     setConfirmDelete(null);
   };
 
@@ -83,6 +98,23 @@ export default function AdminUsers() {
       .update({ status: newStatus, is_blocked: !isBlocked })
       .eq("id", id);
     if (!error) setUsers(prev => prev.map(u => u.id===id ? { ...u, status:newStatus, is_blocked:!isBlocked, blocked:!isBlocked } : u));
+  };
+
+  const handleRestore = async (id) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "active", is_blocked: false })
+      .eq("id", id);
+
+    if (!error) {
+      setUsers(prev =>
+        prev.map(u => (
+          u.id === id
+            ? { ...u, status: "active", is_blocked: false, blocked: false }
+            : u
+        ))
+      );
+    }
   };
 
   const filtered = users.filter(u =>
@@ -101,7 +133,7 @@ export default function AdminUsers() {
           User Management
         </h1>
         <p style={{ color:"rgba(255,255,255,0.4)", marginTop:4, fontSize:13 }}>
-          View, block, or remove user accounts across the platform
+          View, block, revoke, or restore user access across the platform
         </p>
       </div>
 
@@ -124,8 +156,8 @@ export default function AdminUsers() {
                   <AlertTriangle size={20} color="#f87171"/>
                 </div>
                 <div>
-                  <div style={{ fontWeight:700, color:"white", fontSize:16 }}>Delete User</div>
-                  <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12 }}>This action cannot be undone</div>
+                  <div style={{ fontWeight:700, color:"white", fontSize:16 }}>Remove User Access</div>
+                  <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12 }}>The account will be disabled and unable to sign in</div>
                 </div>
               </div>
               <div style={{ display:"flex", gap:10, marginTop:20 }}>
@@ -141,7 +173,7 @@ export default function AdminUsers() {
                     border:"none", color:"white", fontWeight:700, cursor:"pointer",
                     fontFamily:"'Inter',sans-serif", fontSize:13,
                     boxShadow:"0 0 20px rgba(239,68,68,0.3)" }}>
-                  Delete
+                  Remove Access
                 </button>
               </div>
             </motion.div>
@@ -224,44 +256,72 @@ export default function AdminUsers() {
                       <Badge type={user.is_admin ? "admin" : "user"} />
                     </td>
                     <td>
-                      <Badge type={user.blocked ? "blocked" : "active"} />
+                      <Badge type={user.status === "deleted" ? "deleted" : user.blocked ? "blocked" : "active"} />
                     </td>
                     <td style={{ color:"rgba(255,255,255,0.6)", fontSize:13 }}>{user.total_items}</td>
                     <td>
                       <div className="row-actions" style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
                         {!user.is_admin && (
                           <>
-                            <button
-                              onClick={() => handleToggleBlock(user.id, user.blocked)}
-                              title={user.blocked ? "Unblock" : "Block"}
-                              style={{
-                                background: user.blocked ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
-                                border: `1px solid ${user.blocked ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`,
-                                borderRadius:8, padding:"5px 12px",
-                                color: user.blocked ? "#34d399" : "#fbbf24",
-                                fontSize:11, fontWeight:700, cursor:"pointer",
-                                fontFamily:"'Inter',sans-serif",
-                                transition:"box-shadow 0.2s",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.boxShadow=`0 0 15px ${user.blocked?"rgba(16,185,129,0.4)":"rgba(245,158,11,0.4)"}`}
-                              onMouseLeave={e => e.currentTarget.style.boxShadow="none"}
-                            >
-                              {user.blocked ? <><CheckCircle size={12} style={{display:"inline",marginRight:4}}/> Unblock</> : <><Ban size={12} style={{display:"inline",marginRight:4}}/>Block</>}
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(user.id)}
-                              title="Delete"
-                              style={{
-                                background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
-                                borderRadius:8, padding:"5px 8px", color:"#f87171",
-                                cursor:"pointer", display:"flex", alignItems:"center",
-                                transition:"box-shadow 0.2s",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.boxShadow="0 0 15px rgba(239,68,68,0.4)"}
-                              onMouseLeave={e => e.currentTarget.style.boxShadow="none"}
-                            >
-                              <Trash2 size={14}/>
-                            </button>
+                            {user.status === "deleted" ? (
+                              <button
+                                onClick={() => handleRestore(user.id)}
+                                title="Restore User"
+                                style={{
+                                  background:"rgba(16,185,129,0.15)",
+                                  border:"1px solid rgba(16,185,129,0.3)",
+                                  borderRadius:8,
+                                  padding:"5px 12px",
+                                  color:"#34d399",
+                                  fontSize:11,
+                                  fontWeight:700,
+                                  cursor:"pointer",
+                                  fontFamily:"'Inter',sans-serif",
+                                  transition:"box-shadow 0.2s",
+                                  display:"flex",
+                                  alignItems:"center",
+                                  gap:6,
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.boxShadow="0 0 15px rgba(16,185,129,0.4)"}
+                                onMouseLeave={e => e.currentTarget.style.boxShadow="none"}
+                              >
+                                <RotateCcw size={12}/> Restore
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleToggleBlock(user.id, user.blocked)}
+                                  title={user.blocked ? "Unblock" : "Block"}
+                                  style={{
+                                    background: user.blocked ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
+                                    border: `1px solid ${user.blocked ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`,
+                                    borderRadius:8, padding:"5px 12px",
+                                    color: user.blocked ? "#34d399" : "#fbbf24",
+                                    fontSize:11, fontWeight:700, cursor:"pointer",
+                                    fontFamily:"'Inter',sans-serif",
+                                    transition:"box-shadow 0.2s",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.boxShadow=`0 0 15px ${user.blocked?"rgba(16,185,129,0.4)":"rgba(245,158,11,0.4)"}`}
+                                  onMouseLeave={e => e.currentTarget.style.boxShadow="none"}
+                                >
+                                  {user.blocked ? <><CheckCircle size={12} style={{display:"inline",marginRight:4}}/> Unblock</> : <><Ban size={12} style={{display:"inline",marginRight:4}}/>Block</>}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete(user.id)}
+                                  title="Remove Access"
+                                  style={{
+                                    background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
+                                    borderRadius:8, padding:"5px 8px", color:"#f87171",
+                                    cursor:"pointer", display:"flex", alignItems:"center",
+                                    transition:"box-shadow 0.2s",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.boxShadow="0 0 15px rgba(239,68,68,0.4)"}
+                                  onMouseLeave={e => e.currentTarget.style.boxShadow="none"}
+                                >
+                                  <Trash2 size={14}/>
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>

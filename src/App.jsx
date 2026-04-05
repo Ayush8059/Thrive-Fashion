@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 
@@ -35,15 +35,37 @@ const AdminDonations = lazy(() => import("./pages/admin/AdminDonations"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 
+function isAccessRevoked(profile) {
+  return Boolean(profile?.is_blocked) || (profile?.status && profile.status !== "active");
+}
+
 function ProtectedRoute() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
+
+  useEffect(() => {
+    if (user && isAccessRevoked(profile)) {
+      void logout();
+    }
+  }, [user, profile, logout]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (user && isAccessRevoked(profile)) {
+    return <div className="min-h-screen flex items-center justify-center">Access revoked. Signing out...</div>;
+  }
   return user ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 function PublicRoute() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
+
+  useEffect(() => {
+    if (user && isAccessRevoked(profile)) {
+      void logout();
+    }
+  }, [user, profile, logout]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (user && isAccessRevoked(profile)) return <div className="min-h-screen flex items-center justify-center">Access revoked. Signing out...</div>;
   if (!user) return <Outlet />;
   return profile?.is_admin
     ? <Navigate to="/admin/dashboard" replace />
@@ -51,8 +73,16 @@ function PublicRoute() {
 }
 
 function AdminEntryRoute() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
+
+  useEffect(() => {
+    if (user && isAccessRevoked(profile)) {
+      void logout();
+    }
+  }, [user, profile, logout]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (user && isAccessRevoked(profile)) return <div className="min-h-screen flex items-center justify-center">Access revoked. Signing out...</div>;
   if (!user) return <AdminLogin />;
   return profile?.is_admin
     ? <Navigate to="/admin/dashboard" replace />

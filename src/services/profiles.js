@@ -1,8 +1,8 @@
 import { supabase } from "../supabaseClient";
 
-const PROFILE_BASE_SELECT = "id, full_name, email, phone, bio, avatar_url, is_admin";
+const PROFILE_BASE_SELECT = "id, full_name, email, phone, bio, avatar_url, is_admin, is_blocked";
 const PROFILE_EXTENDED_SELECT = `${PROFILE_BASE_SELECT}, status, date_of_birth, gender, city`;
-const OPTIONAL_PROFILE_FIELDS = new Set(["status", "date_of_birth", "gender", "city"]);
+const OPTIONAL_PROFILE_FIELDS = new Set(["status", "date_of_birth", "gender", "city", "is_blocked"]);
 
 function isMissingProfileColumnError(error) {
   const message = error?.message || "";
@@ -20,6 +20,7 @@ export function normalizeProfile(profile) {
 
   return {
     ...profile,
+    is_blocked: Boolean(profile.is_blocked),
     status: profile.status || "active",
     date_of_birth: profile.date_of_birth || null,
     gender: profile.gender || "",

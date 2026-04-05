@@ -60,9 +60,21 @@ export default function Login() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("is_admin")
+          .select("is_admin, is_blocked, status")
           .eq("id", user.id)
           .maybeSingle();
+
+        const accessRevoked =
+          profile?.is_blocked ||
+          profile?.status === "blocked" ||
+          profile?.status === "deleted" ||
+          (profile?.status && !["active", "blocked", "deleted"].includes(profile.status));
+
+        if (accessRevoked) {
+          await supabase.auth.signOut();
+          setErrorMsg("This account has been disabled. Please contact support.");
+          return;
+        }
 
         if (profile?.is_admin) {
           navigate("/admin/dashboard");
