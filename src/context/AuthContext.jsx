@@ -225,6 +225,21 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    const syncCurrentProfile = async () => {
+      if (document.visibilityState === "hidden") return;
+      await fetchProfile(latestUserRef.current || user);
+    };
+
+    const intervalId = window.setInterval(() => {
+      void syncCurrentProfile();
+    }, 20000);
+
+    return () => window.clearInterval(intervalId);
+  }, [user]);
+
   return (
     <AuthContext.Provider
       value={{
