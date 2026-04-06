@@ -20,6 +20,39 @@ export function AuthProvider({ children }) {
   const latestUserRef = useRef(null);
   const latestProfileRef = useRef(null);
 
+  const isInvalidRefreshTokenError = (error) => {
+    const message = error?.message || "";
+    return /invalid refresh token|refresh token not found/i.test(message);
+  };
+
+  const clearBrokenSession = async () => {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Clearing a stale local session should stay silent.
+    }
+    if (!mountedRef.current) return;
+    setUser(null);
+    setProfile(null);
+    latestUserRef.current = null;
+    latestProfileRef.current = null;
+    setAal("aal1");
+    setNextAal("aal1");
+    setHasTotpFactor(false);
+  };
+
+  const safeGetSession = async () => {
+    try {
+      return await supabase.auth.getSession();
+    } catch (error) {
+      if (isInvalidRefreshTokenError(error)) {
+        await clearBrokenSession();
+        return { data: { session: null }, error };
+      }
+      throw error;
+    }
+  };
+
   const ensureProfile = async (authUser) => {
     const fallbackName =
       authUser?.user_metadata?.full_name ||
@@ -132,7 +165,9 @@ export function AuthProvider({ children }) {
     }
 
     sessionRefreshRef.current = (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await safeGetSession();
       lastSessionCheckRef.current = Date.now();
       const authUser = session?.user ?? null;
       await queueAuthSync(authUser);
@@ -167,12 +202,19 @@ export function AuthProvider({ children }) {
     let initialized = false;
     mountedRef.current = true;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      initialized = true;
-      lastSessionCheckRef.current = Date.now();
-      await queueAuthSync(session?.user ?? null);
-      setLoading(false);
-    });
+    safeGetSession()
+      .then(async ({ data: { session } }) => {
+        initialized = true;
+        lastSessionCheckRef.current = Date.now();
+        await queueAuthSync(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch(async (error) => {
+        console.error("Session restore error:", error?.message || error);
+        initialized = true;
+        await clearBrokenSession();
+        setLoading(false);
+      });
 
     const {
       data: { subscription },

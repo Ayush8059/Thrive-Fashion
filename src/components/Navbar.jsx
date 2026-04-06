@@ -393,7 +393,7 @@ export default function Navbar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="absolute left-0 top-16 flex w-full flex-col gap-2 border-b border-gray-100 bg-white/95 px-4 py-4 shadow-xl backdrop-blur-xl dark:border-gray-800 dark:bg-slate-900/95 md:hidden"
+            className="absolute left-0 top-16 flex max-h-[calc(100vh-4rem)] w-full flex-col gap-2 overflow-y-auto border-b border-gray-100 bg-white px-4 py-4 shadow-xl backdrop-blur-xl dark:border-gray-800 dark:bg-slate-950 md:hidden"
           >
             <MobileLink to="/marketplace" onClick={() => setIsOpen(false)}>Marketplace</MobileLink>
             <MobileLink to="/dashboard" onClick={() => setIsOpen(false)}>Dashboard</MobileLink>
@@ -434,7 +434,7 @@ function MobileLink({ to, children, onClick }) {
       className={`rounded-lg px-4 py-3 font-medium transition-colors ${
         isActive
           ? "bg-primary font-bold text-dark shadow-sm"
-          : "text-gray-800 hover:bg-lightgray hover:text-dark"
+          : "text-gray-800 hover:bg-lightgray hover:text-dark dark:text-gray-100 dark:hover:bg-slate-800 dark:hover:text-white"
       }`}
     >
       <motion.div whileHover={{ x: 10 }}>{children}</motion.div>
