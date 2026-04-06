@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu, X, LayoutDashboard, Users, Package,
-  HeartHandshake, BarChart3, Settings, LogOut, Shield, Bell, Zap
+  HeartHandshake, BarChart3, Settings, LogOut, Shield, Bell, Zap, MessageSquareHeart, AlertTriangle
 } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
@@ -232,6 +232,8 @@ const links = [
   { name:"Items",     path:"/admin/items",     icon:<Package size={18}/>,         emoji:"📦" },
   { name:"Donations", path:"/admin/donations", icon:<HeartHandshake size={18}/>,  emoji:"💎" },
   { name:"Reports",   path:"/admin/reports",   icon:<BarChart3 size={18}/>,       emoji:"📊" },
+  { name:"Feedback",  path:"/admin/feedback",  icon:<MessageSquareHeart size={18}/>, emoji:"💬" },
+  { name:"Errors",    path:"/admin/errors",    icon:<AlertTriangle size={18}/>,   emoji:"⚠️" },
   { name:"Settings",  path:"/admin/settings",  icon:<Settings size={18}/>,        emoji:"⚙️" },
 ];
 

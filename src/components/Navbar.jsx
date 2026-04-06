@@ -407,6 +407,7 @@ export default function Navbar() {
             <MobileLink to="/orders" onClick={() => setIsOpen(false)}>Orders</MobileLink>
             <MobileLink to="/sales" onClick={() => setIsOpen(false)}>Sales</MobileLink>
             <MobileLink to="/messages" onClick={() => setIsOpen(false)}>Messages</MobileLink>
+            <MobileLink to="/feedback" onClick={() => setIsOpen(false)}>Feedback</MobileLink>
             <MobileLink to="/about" onClick={() => setIsOpen(false)}>About Us</MobileLink>
             <button
               onClick={handleLogout}

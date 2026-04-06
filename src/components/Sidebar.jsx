@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Shirt, DollarSign, HeartHandshake,
-  Package, UserCircle, Store, Heart, LogOut, ShoppingCart, ReceiptText, MessagesSquare, Info
+  Package, UserCircle, Store, Heart, LogOut, ShoppingCart, ReceiptText, MessagesSquare, Info, MessageSquareHeart
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -59,6 +59,7 @@ export default function Sidebar() {
         <SidebarLink to="/sales" icon={<ReceiptText />}>Sales History</SidebarLink>
         <SidebarLink to="/messages" icon={<MessagesSquare />}>Messages</SidebarLink>
         <SidebarLink to="/items" icon={<Package />}>My Items</SidebarLink>
+        <SidebarLink to="/feedback" icon={<MessageSquareHeart />}>Feedback</SidebarLink>
         <SidebarLink to="/about" icon={<Info />}>About Us</SidebarLink>
       </div>
 

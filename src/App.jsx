@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import { logAppError } from "./services/appErrors";
 
 const AuthLayout = lazy(() => import("./layouts/AuthLayout"));
 const DashboardLayout = lazy(() => import("./layouts/DashboardLayout"));
@@ -26,6 +27,7 @@ const Sales = lazy(() => import("./pages/dashboard/Sales"));
 const Messages = lazy(() => import("./pages/dashboard/Messages"));
 const DonationHistory = lazy(() => import("./pages/dashboard/DonationHistory"));
 const About = lazy(() => import("./pages/dashboard/About"));
+const Feedback = lazy(() => import("./pages/dashboard/Feedback"));
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -33,6 +35,8 @@ const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminItems = lazy(() => import("./pages/admin/AdminItems"));
 const AdminDonations = lazy(() => import("./pages/admin/AdminDonations"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
+const AdminFeedback = lazy(() => import("./pages/admin/AdminFeedback"));
+const AdminErrors = lazy(() => import("./pages/admin/AdminErrors"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 
 function isAccessRevoked(profile) {
@@ -90,6 +94,37 @@ function AdminEntryRoute() {
 }
 
 function App() {
+  useEffect(() => {
+    const handleError = (event) => {
+      void logAppError({
+        message: event.message || "Unhandled error",
+        stack: event.error?.stack || "",
+        source: event.filename || "window.onerror",
+        metadata: {
+          lineno: event.lineno,
+          colno: event.colno,
+        },
+      });
+    };
+
+    const handleUnhandledRejection = (event) => {
+      const reason = event.reason;
+      void logAppError({
+        message: reason?.message || String(reason || "Unhandled promise rejection"),
+        stack: reason?.stack || "",
+        source: "unhandledrejection",
+      });
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
@@ -123,6 +158,7 @@ function App() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/donations/history" element={<DonationHistory />} />
             <Route path="/about" element={<About />} />
+            <Route path="/feedback" element={<Feedback />} />
           </Route>
         </Route>
 
@@ -134,6 +170,8 @@ function App() {
           <Route path="/admin/items" element={<AdminItems />} />
           <Route path="/admin/donations" element={<AdminDonations />} />
           <Route path="/admin/reports" element={<AdminReports />} />
+          <Route path="/admin/feedback" element={<AdminFeedback />} />
+          <Route path="/admin/errors" element={<AdminErrors />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
         </Route>
 
