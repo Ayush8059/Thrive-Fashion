@@ -159,7 +159,7 @@ export default function Navbar() {
   const notificationPages = Math.max(1, Math.ceil(totalNotifications / NOTIFICATIONS_PAGE_SIZE));
 
   return (
-    <nav className="fixed top-0 z-50 h-16 w-full border-b border-gray-100 bg-white/80 shadow-sm backdrop-blur-xl dark:border-gray-800 dark:bg-slate-950/80">
+    <nav className="fixed top-0 z-[90] h-16 w-full border-b border-gray-100 bg-white/90 shadow-sm backdrop-blur-xl dark:border-gray-800 dark:bg-slate-950/90">
       <div className="flex h-full items-center justify-between px-4 lg:px-8">
         <div className="flex items-center gap-3">
           <button
@@ -388,35 +388,54 @@ export default function Navbar() {
 
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-            className="absolute left-0 top-16 flex max-h-[calc(100vh-4rem)] w-full flex-col gap-2 overflow-y-auto border-b border-gray-100 bg-white px-4 py-4 shadow-xl backdrop-blur-xl dark:border-gray-800 dark:bg-slate-950 md:hidden"
-          >
-            <MobileLink to="/marketplace" onClick={() => setIsOpen(false)}>Marketplace</MobileLink>
-            <MobileLink to="/dashboard" onClick={() => setIsOpen(false)}>Dashboard</MobileLink>
-            <MobileLink to="/wardrobe" onClick={() => setIsOpen(false)}>Wardrobe</MobileLink>
-            <MobileLink to="/sell" onClick={() => setIsOpen(false)}>Sell</MobileLink>
-            <MobileLink to="/donate" onClick={() => setIsOpen(false)}>Donate</MobileLink>
-            <MobileLink to="/donations/history" onClick={() => setIsOpen(false)}>Donation Tracking</MobileLink>
-            <MobileLink to="/items" onClick={() => setIsOpen(false)}>My Items</MobileLink>
-            <MobileLink to="/wishlist" onClick={() => setIsOpen(false)}>Wishlist</MobileLink>
-            <MobileLink to="/cart" onClick={() => setIsOpen(false)}>Cart</MobileLink>
-            <MobileLink to="/orders" onClick={() => setIsOpen(false)}>Orders</MobileLink>
-            <MobileLink to="/sales" onClick={() => setIsOpen(false)}>Sales</MobileLink>
-            <MobileLink to="/messages" onClick={() => setIsOpen(false)}>Messages</MobileLink>
-            <MobileLink to="/feedback" onClick={() => setIsOpen(false)}>Feedback</MobileLink>
-            <MobileLink to="/about" onClick={() => setIsOpen(false)}>About Us</MobileLink>
-            <button
-              onClick={handleLogout}
-              className="mt-2 flex items-center gap-3 rounded-lg px-4 py-3 font-medium text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 top-16 z-[88] bg-black/45 backdrop-blur-[2px] md:hidden"
+              aria-label="Close navigation menu"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.22 }}
+              className="fixed inset-x-0 top-16 bottom-0 z-[89] flex flex-col overflow-hidden bg-white dark:bg-slate-950 md:hidden"
             >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </button>
-          </motion.div>
+              <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
+                <div className="flex flex-col gap-2">
+                  <MobileLink to="/marketplace" onClick={() => setIsOpen(false)}>Marketplace</MobileLink>
+                  <MobileLink to="/dashboard" onClick={() => setIsOpen(false)}>Dashboard</MobileLink>
+                  <MobileLink to="/wardrobe" onClick={() => setIsOpen(false)}>Wardrobe</MobileLink>
+                  <MobileLink to="/sell" onClick={() => setIsOpen(false)}>Sell</MobileLink>
+                  <MobileLink to="/donate" onClick={() => setIsOpen(false)}>Donate</MobileLink>
+                  <MobileLink to="/donations/history" onClick={() => setIsOpen(false)}>Donation Tracking</MobileLink>
+                  <MobileLink to="/items" onClick={() => setIsOpen(false)}>My Items</MobileLink>
+                  <MobileLink to="/wishlist" onClick={() => setIsOpen(false)}>Wishlist</MobileLink>
+                  <MobileLink to="/cart" onClick={() => setIsOpen(false)}>Cart</MobileLink>
+                  <MobileLink to="/orders" onClick={() => setIsOpen(false)}>Orders</MobileLink>
+                  <MobileLink to="/sales" onClick={() => setIsOpen(false)}>Sales</MobileLink>
+                  <MobileLink to="/messages" onClick={() => setIsOpen(false)}>Messages</MobileLink>
+                  <MobileLink to="/feedback" onClick={() => setIsOpen(false)}>Feedback</MobileLink>
+                  <MobileLink to="/about" onClick={() => setIsOpen(false)}>About Us</MobileLink>
+                  <MobileLink to="/profile" onClick={() => setIsOpen(false)}>Profile</MobileLink>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="mt-4 flex w-full items-center gap-3 rounded-xl px-4 py-3 font-medium text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </nav>
@@ -434,7 +453,7 @@ function MobileLink({ to, children, onClick }) {
       className={`rounded-lg px-4 py-3 font-medium transition-colors ${
         isActive
           ? "bg-primary font-bold text-dark shadow-sm"
-          : "text-gray-800 hover:bg-lightgray hover:text-dark dark:text-gray-100 dark:hover:bg-slate-800 dark:hover:text-white"
+          : "text-gray-900 hover:bg-gray-100 hover:text-dark dark:text-gray-100 dark:hover:bg-slate-800 dark:hover:text-white"
       }`}
     >
       <motion.div whileHover={{ x: 10 }}>{children}</motion.div>
