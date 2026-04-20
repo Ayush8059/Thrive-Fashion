@@ -362,7 +362,7 @@ export default function Chatbot({ defaultOpen = false, onClose }) {
             initial={{ opacity: 0, scale: 0.92, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 20 }}
-            className="fixed bottom-6 right-6 z-50 flex h-[600px] w-[350px] flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl dark:border-gray-800 dark:bg-slate-900 sm:w-[400px]"
+            className="fixed inset-x-3 bottom-3 top-20 z-[80] flex flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-2xl dark:border-gray-800 dark:bg-slate-900 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[600px] sm:w-[400px]"
           >
             <div className="flex items-center justify-between bg-dark p-4 text-white dark:bg-slate-800">
               <div className="flex items-center gap-3">
