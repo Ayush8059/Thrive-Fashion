@@ -122,6 +122,17 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
   const handleLogout = async () => {
     await logout();
     navigate("/");
@@ -164,7 +175,11 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <button
             className="rounded-lg p-2 text-dark transition-colors hover:bg-lightgray dark:text-white dark:hover:bg-gray-800 md:hidden"
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => {
+              setIsOpen((current) => !current);
+              setShowDropdown(false);
+              setShowNotifications(false);
+            }}
           >
             {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -396,7 +411,17 @@ export default function Navbar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setIsOpen(false)}
-              className="fixed inset-0 top-16 z-[88] bg-black/45 backdrop-blur-[2px] md:hidden"
+              className="md:hidden"
+              style={{
+                position: "fixed",
+                left: 0,
+                right: 0,
+                top: 64,
+                bottom: 0,
+                zIndex: 9998,
+                background: "rgba(0,0,0,0.55)",
+                backdropFilter: "blur(2px)",
+              }}
               aria-label="Close navigation menu"
             />
 
@@ -405,9 +430,20 @@ export default function Navbar() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.22 }}
-              className="fixed inset-x-0 top-16 bottom-0 z-[89] flex flex-col overflow-hidden bg-white dark:bg-slate-950 md:hidden"
+              className="md:hidden"
+              style={{
+                position: "fixed",
+                left: 0,
+                right: 0,
+                top: 64,
+                bottom: 0,
+                zIndex: 9999,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
             >
-              <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
+              <div className="flex-1 overflow-y-auto bg-white px-4 py-4 pb-28 text-gray-900 dark:bg-slate-950 dark:text-white">
                 <div className="flex flex-col gap-2">
                   <MobileLink to="/marketplace" onClick={() => setIsOpen(false)}>Marketplace</MobileLink>
                   <MobileLink to="/dashboard" onClick={() => setIsOpen(false)}>Dashboard</MobileLink>
